@@ -1,0 +1,201 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import type { Comment, UserProfile } from '@/lib/types';
+import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Input';
+import { formatDate } from '@/lib/utils';
+import { useAuth } from '@/lib/auth/AuthProvider';
+import { useI18n } from '@/lib/i18n/LanguageProvider';
+import { useData } from '@/lib/store/data';
+import { notify } from '@/lib/notifications/notify';
+import toast from 'react-hot-toast';
+import { Trash2, Pencil } from 'lucide-react';
+import { DictateButton } from '@/components/ui/DictateButton';
+import { logActivity } from '@/lib/activity/log';
+
+export function TaskComments({ taskId }: { taskId: string }) {
+  const { user, profile } = useAuth();
+  const { t } = useI18n();
+  const supabase = createClient();
+  const { comments: allComments, users, tasks } = useData();
+  const [body, setBody] = useState('');
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const comments = useMemo(
+    () => allComments
+      .filter(c => c.task_id === taskId)
+      .sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
+      .map(c => ({ ...c, author: users.find(u => u.id === c.author_id) })),
+    [allComments, users, taskId]
+  );
+
+  const send = async () => {
+    if (!body.trim() || !user) return;
+    setLoading(true);
+    try {
+      const res = await supabase.from('comments').insert({
+        task_id: taskId,
+        body: body.trim(),
+        author_id: user.id,
+        parent_id: replyTo,
+      }).select().single();
+      if (res.error) { toast.error(res.error.message); return; }
+      const savedComment = res.data as Comment;
+      useData.getState().applyComment({ new: savedComment, old: null, eventType: 'INSERT' });
+
+      const task = tasks.find(x => x.id === taskId);
+      logActivity({
+        actorId: user.id,
+        entityType: 'comment',
+        entityId: savedComment.id,
+        action: 'commented',
+        meta: { task_id: taskId, task_title: task?.title, body: body.trim().slice(0, 200) },
+      });
+      if (task?.assignee_id && task.assignee_id !== user.id) {
+        const href = `/projects/${task.project_id}`;
+        notify({
+          userId: task.assignee_id,
+          kind: 'new_comment',
+          title: `New comment on: ${task.title}`,
+          body: body.trim().slice(0, 140),
+          link: href,
+        });
+      }
+
+      setBody('');
+      setReplyTo(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to post comment';
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const del = async (id: string) => {
+    const target = allComments.find(c => c.id === id);
+    const { error } = await supabase.from('comments').delete().eq('id', id);
+    if (error) { toast.error(error.message); return; }
+    useData.getState().applyComment({ new: null, old: { id }, eventType: 'DELETE' });
+    logActivity({
+      actorId: user?.id ?? null,
+      entityType: 'comment',
+      entityId: id,
+      action: 'deleted',
+      meta: { task_id: taskId, body: target?.body?.slice(0, 200) },
+    });
+  };
+
+  const edit = async (id: string, nextBody: string) => {
+    const trimmed = nextBody.trim();
+    if (!trimmed) { toast.error('Comment cannot be empty'); return false; }
+    const res = await supabase.from('comments').update({ body: trimmed }).eq('id', id).select().single();
+    if (res.error) { toast.error(res.error.message); return false; }
+    useData.getState().applyComment({ new: res.data as Comment, old: { id }, eventType: 'UPDATE' });
+    return true;
+  };
+
+  const roots = comments.filter(c => !c.parent_id);
+  const repliesOf = (id: string) => comments.filter(c => c.parent_id === id);
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-4">
+        {roots.length === 0 && <div className="text-sm text-slate-500">No comments yet.</div>}
+        {roots.map(c => (
+          <div key={c.id}>
+            <CommentRow c={c} currentUserId={user?.id} onReply={() => setReplyTo(c.id)} onDelete={() => del(c.id)} onEdit={(b) => edit(c.id, b)} isAdmin={profile?.role === 'admin'} />
+            <div className="ms-10 mt-3 space-y-3">
+              {repliesOf(c.id).map(r => (
+                <CommentRow key={r.id} c={r} currentUserId={user?.id} onDelete={() => del(r.id)} onEdit={(b) => edit(r.id, b)} isAdmin={profile?.role === 'admin'} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+        {replyTo && (
+          <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+            <span>Replying…</span>
+            <button onClick={() => setReplyTo(null)} className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">{t('common.cancel')}</button>
+          </div>
+        )}
+        <Textarea
+          value={body}
+          onChange={e => setBody(e.target.value)}
+          placeholder={t('task.add_comment')}
+          rows={3}
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <DictateButton
+            onTranscript={(chunk) =>
+              setBody(prev => (prev && !prev.endsWith(' ') ? prev + ' ' : prev) + chunk)
+            }
+          />
+          <Button size="sm" loading={loading} onClick={send} disabled={!body.trim()}>{t('task.post')}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommentRow({
+  c, currentUserId, onReply, onDelete, onEdit, isAdmin,
+}: {
+  c: Comment & { author?: UserProfile | undefined };
+  currentUserId?: string;
+  onReply?: () => void;
+  onDelete: () => void;
+  onEdit: (body: string) => Promise<boolean>;
+  isAdmin?: boolean;
+}) {
+  const { t } = useI18n();
+  const canModify = c.author_id === currentUserId || isAdmin;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(c.body);
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = () => { setDraft(c.body); setEditing(true); };
+  const cancelEdit = () => { setEditing(false); setDraft(c.body); };
+  const saveEdit = async () => {
+    setSaving(true);
+    const ok = await onEdit(draft);
+    setSaving(false);
+    if (ok) setEditing(false);
+  };
+
+  return (
+    <div className="flex gap-3">
+      <Avatar name={c.author?.full_name} email={c.author?.email} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{c.author?.full_name ?? c.author?.email ?? '—'}</span>
+          <span className="text-xs text-slate-400">{formatDate(c.created_at, 'MMM d, HH:mm')}</span>
+        </div>
+        {editing ? (
+          <div className="mt-1">
+            <Textarea value={draft} onChange={e => setDraft(e.target.value)} rows={3} />
+            <div className="mt-2 flex items-center gap-2">
+              <Button size="sm" loading={saving} onClick={saveEdit} disabled={!draft.trim()}>{t('common.save')}</Button>
+              <Button size="sm" variant="ghost" onClick={cancelEdit}>{t('common.cancel')}</Button>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{c.body}</p>
+        )}
+        {!editing && (
+          <div className="mt-1 flex items-center gap-3 text-xs">
+            {onReply && <button onClick={onReply} className="text-slate-500 hover:text-brand-600">{t('task.reply')}</button>}
+            {canModify && <button onClick={startEdit} className="inline-flex items-center gap-1 text-slate-500 hover:text-brand-600"><Pencil className="h-3 w-3" />Edit</button>}
+            {canModify && <button onClick={onDelete} className="inline-flex items-center gap-1 text-slate-500 hover:text-rose-600"><Trash2 className="h-3 w-3" />{t('common.delete')}</button>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
