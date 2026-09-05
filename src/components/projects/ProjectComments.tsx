@@ -17,7 +17,7 @@ import { DictateButton } from '@/components/ui/DictateButton';
 import { logActivity } from '@/lib/activity/log';
 
 export function ProjectComments({ projectId }: { projectId: string }) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { t } = useI18n();
   const supabase = createClient();
   const { comments: allComments, users, projects } = useData();
@@ -102,10 +102,10 @@ export function ProjectComments({ projectId }: { projectId: string }) {
         {roots.length === 0 && <div className="text-sm text-slate-500">No comments yet.</div>}
         {roots.map(c => (
           <div key={c.id}>
-            <CommentRow c={c} currentUserId={user?.id} onReply={() => setReplyTo(c.id)} onDelete={() => del(c.id)} isAdmin={profile?.role === 'admin'} />
+            <CommentRow c={c} onReply={() => setReplyTo(c.id)} onDelete={() => del(c.id)} />
             <div className="ms-10 mt-3 space-y-3">
               {repliesOf(c.id).map(r => (
-                <CommentRow key={r.id} c={r} currentUserId={user?.id} onDelete={() => del(r.id)} isAdmin={profile?.role === 'admin'} />
+                <CommentRow key={r.id} c={r} onDelete={() => del(r.id)} />
               ))}
             </div>
           </div>
@@ -139,16 +139,15 @@ export function ProjectComments({ projectId }: { projectId: string }) {
 }
 
 function CommentRow({
-  c, currentUserId, onReply, onDelete, isAdmin,
+  c, onReply, onDelete,
 }: {
   c: Comment & { author?: UserProfile | undefined };
-  currentUserId?: string;
   onReply?: () => void;
   onDelete: () => void;
-  isAdmin?: boolean;
 }) {
   const { t } = useI18n();
-  const canDelete = c.author_id === currentUserId || isAdmin;
+  // Any signed-in user can delete any comment.
+  const canDelete = true;
   return (
     <div className="flex gap-3">
       <Avatar name={c.author?.full_name} email={c.author?.email} />

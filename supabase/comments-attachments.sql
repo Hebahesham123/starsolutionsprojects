@@ -79,11 +79,11 @@ drop policy if exists "attachments_insert" on public.attachments;
 create policy "attachments_insert" on public.attachments for insert
   with check (uploaded_by = auth.uid());
 
--- Delete: uploader or admin.
-drop policy if exists "attachments_delete" on public.attachments;
-create policy "attachments_delete" on public.attachments for delete using (
-  uploaded_by = auth.uid() or public.current_user_role() = 'admin'
-);
+-- Delete: any signed-in user can delete any attachment.
+drop policy if exists "attachments_delete"     on public.attachments;
+drop policy if exists "attachments_delete_all" on public.attachments;
+create policy "attachments_delete_all" on public.attachments for delete
+  using (auth.uid() is not null);
 
 -- 3) Storage bucket + policies.
 insert into storage.buckets (id, name, public)
@@ -101,7 +101,4 @@ create policy "attachments_storage_insert" on storage.objects for insert
 
 drop policy if exists "attachments_storage_delete" on storage.objects;
 create policy "attachments_storage_delete" on storage.objects for delete
-  using (
-    bucket_id = 'attachments'
-    and (owner = auth.uid() or public.current_user_role() = 'admin')
-  );
+  using (bucket_id = 'attachments' and auth.uid() is not null);

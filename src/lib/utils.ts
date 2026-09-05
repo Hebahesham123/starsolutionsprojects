@@ -66,6 +66,34 @@ export const healthClasses: Record<HealthColor, string> = {
   gray:   'bg-slate-300 dark:bg-slate-600',
 };
 
+/**
+ * Split a plan-style people label into the individual people it names.
+ *   "HEBA & MERA"                -> ["HEBA", "MERA"]
+ *   "LOGIC: HEBA / UI: MARTHA"   -> ["HEBA", "MARTHA"]
+ *   "DR AHMED"                   -> ["DR AHMED"]
+ * Used to roll task assignees / blockers up to the project row.
+ */
+export function splitPeople(label?: string | null): string[] {
+  if (!label) return [];
+  return label
+    .split(/[&/,+]|\band\b/i)
+    .map(part => part.split(':').pop() ?? '')   // drop "LOGIC:" / "UI:" prefixes
+    .map(part => part.trim())
+    .filter(part => part.length > 0 && part !== '—');
+}
+
+/** Distinct people across many labels, first-seen order preserved. */
+export function uniquePeople(labels: (string | null | undefined)[]): string[] {
+  const seen = new Map<string, string>();
+  for (const label of labels) {
+    for (const person of splitPeople(label)) {
+      const key = person.toLowerCase();
+      if (!seen.has(key)) seen.set(key, person);
+    }
+  }
+  return Array.from(seen.values());
+}
+
 export function initialsFromName(name?: string | null, email?: string | null) {
   const base = (name && name.trim()) || email || '';
   const parts = base.split(/[\s@._-]+/).filter(Boolean);

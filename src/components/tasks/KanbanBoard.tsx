@@ -27,8 +27,16 @@ function TaskCard({ task, onClick }: { task: Task; onClick?: () => void }) {
         isDragging && 'opacity-50'
       )}
     >
-      <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{task.title}</div>
+      <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+        {task.task_code && <span className="me-1.5 font-mono text-xs text-slate-400">{task.task_code}</span>}
+        {task.title}
+      </div>
       {task.description && <div className="mt-1 line-clamp-2 text-xs text-slate-500">{task.description}</div>}
+      {task.blocked_by && (
+        <div className="mt-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+          Blocked by {task.blocked_by}
+        </div>
+      )}
       <div className="mt-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {task.assignee_id && <Avatar size={22} name={task.assignee_name} email={task.assignee_email} />}

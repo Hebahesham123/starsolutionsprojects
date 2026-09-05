@@ -15,14 +15,12 @@ type Parent =
 
 export function Attachments({ parent }: { parent: Parent }) {
   const supabase = createClient();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [rows, setRows] = useState<Attachment[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const isAdmin = profile?.role === 'admin';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,7 +137,7 @@ export function Attachments({ parent }: { parent: Parent }) {
           {rows.map(a => {
             const isImage = (a.content_type ?? '').startsWith('image/');
             const url = urls[a.id];
-            const canDelete = a.uploaded_by === user?.id || isAdmin;
+            const canDelete = true; // any signed-in user can delete any attachment
             return (
               <li key={a.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-2 dark:border-slate-800">
                 {isImage && url ? (

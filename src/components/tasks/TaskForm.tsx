@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 import { UserX } from 'lucide-react';
 import { DictateButton } from '@/components/ui/DictateButton';
 import { logActivity } from '@/lib/activity/log';
-import type { Task, TaskStatus } from '@/lib/types';
+import type { Task, TaskStatus, TaskType } from '@/lib/types';
 
 export function TaskForm({ projectId, initial, onDone, readOnly = false }: { projectId: string; initial?: Partial<Task>; onDone?: () => void; readOnly?: boolean }) {
   const { t } = useI18n();
@@ -34,6 +34,9 @@ export function TaskForm({ projectId, initial, onDone, readOnly = false }: { pro
     start_date: initial?.start_date ?? '',
     due_date: initial?.due_date ?? '',
     departments: initial?.departments ?? [],
+    task_code: initial?.task_code ?? '',
+    task_type: (initial?.task_type ?? '') as TaskType | '',
+    blocked_by: initial?.blocked_by ?? '',
   });
 
   async function save(e: React.FormEvent) {
@@ -49,6 +52,9 @@ export function TaskForm({ projectId, initial, onDone, readOnly = false }: { pro
         assignee_mobile: form.assignee_mobile || null,
         start_date: form.start_date || null,
         due_date: form.due_date || null,
+        task_code: form.task_code || null,
+        task_type: form.task_type || null,
+        blocked_by: form.blocked_by || null,
         created_by: user?.id ?? null,
       };
       const res = initial?.id
@@ -153,9 +159,16 @@ export function TaskForm({ projectId, initial, onDone, readOnly = false }: { pro
   return (
     <form onSubmit={save} className="space-y-4">
       <fieldset disabled={readOnly} className="space-y-4 disabled:opacity-90">
-      <div>
-        <Label htmlFor="title">{t('task.title')}</Label>
-        <Input id="title" required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[7rem_1fr]">
+        <div>
+          <Label htmlFor="task_code">#</Label>
+          <Input id="task_code" placeholder="1.5" value={form.task_code}
+                 onChange={e => setForm({ ...form, task_code: e.target.value })} />
+        </div>
+        <div>
+          <Label htmlFor="title">{t('task.title')}</Label>
+          <Input id="title" required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+        </div>
       </div>
       <div>
         <div className="flex items-center justify-between">
@@ -218,6 +231,26 @@ export function TaskForm({ projectId, initial, onDone, readOnly = false }: { pro
           <div>
             <Label htmlFor="a_mobile">{t('task.assignee_mobile')}</Label>
             <Input id="a_mobile" value={form.assignee_mobile ?? ''} onChange={e => setForm({ ...form, assignee_mobile: e.target.value })} />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+        <h4 className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-200">Dependency</h4>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <Label htmlFor="task_type">Type</Label>
+            <Select id="task_type" value={form.task_type}
+                    onChange={e => setForm({ ...form, task_type: e.target.value as TaskType | '' })}>
+              <option value="">— Not set —</option>
+              <option value="DEP">DEP — depends on someone</option>
+              <option value="IND">IND — independent</option>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="blocked_by">Blocked by (person)</Label>
+            <Input id="blocked_by" placeholder="e.g. HEBA & DR AHMED" value={form.blocked_by}
+                   onChange={e => setForm({ ...form, blocked_by: e.target.value })} />
           </div>
         </div>
       </div>

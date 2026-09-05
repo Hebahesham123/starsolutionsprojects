@@ -18,9 +18,29 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Card } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { Progress } from '@/components/ui/Progress';
-import { formatDate, projectHealth, healthClasses, cn, daysBetween } from '@/lib/utils';
+import { formatDate, projectHealth, healthClasses, cn, daysBetween, uniquePeople } from '@/lib/utils';
 import { DEPARTMENTS, DEPARTMENTS_TOP, DEPARTMENT_GROUPS, PROJECT_MANAGERS } from '@/lib/constants';
 import { HierarchySelect } from '@/components/ui/HierarchySelect';
+
+/** Avatar stack for a list of people, overflowing to "+N" past the third. */
+function PeopleCell({ people }: { people: string[] }) {
+  if (people.length === 0) return <span className="text-slate-400">—</span>;
+  const shown = people.slice(0, 3);
+  return (
+    <div className="flex items-center gap-1.5" title={people.join(', ')}>
+      <div className="flex -space-x-1.5">
+        {shown.map(person => (
+          <span key={person} className="ring-2 ring-white rounded-full dark:ring-slate-900">
+            <Avatar size={22} name={person} />
+          </span>
+        ))}
+      </div>
+      <span className="whitespace-nowrap text-xs text-slate-700 dark:text-slate-200">
+        {people.length === 1 ? people[0] : `${people[0]} +${people.length - 1}`}
+      </span>
+    </div>
+  );
+}
 
 export default function ProjectsPage() {
   const { t } = useI18n();
@@ -70,6 +90,20 @@ export default function ProjectsPage() {
     }
     return map;
   }, [tasks]);
+
+  // The project owner IS whoever the project's tasks are assigned to, and the
+  // project is blocked by whoever its tasks are blocked by. Derived (not stored)
+  // so both stay correct as tasks are reassigned.
+  const rollupByProject = useMemo(() => {
+    const map = new Map<string, { owners: string[]; blockers: string[] }>();
+    for (const [projectId, list] of tasksByProject) {
+      map.set(projectId, {
+        owners: uniquePeople(list.map(x => x.assignee_name)),
+        blockers: uniquePeople(list.map(x => x.blocked_by)),
+      });
+    }
+    return map;
+  }, [tasksByProject]);
 
   // only show users in the filter who are actually assigned to at least one task
   const memberOptions = useMemo(() => {
@@ -125,7 +159,8 @@ export default function ProjectsPage() {
     const { exportCsv } = await import('@/lib/export');
     exportCsv(filtered.map(p => ({
       name: p.name, status: p.status, sector: p.sector ?? '',
-      owner_name: p.owner_name ?? '', owner_email: p.owner_email ?? '',
+      owner: (rollupByProject.get(p.id)?.owners ?? []).join(', ') || p.owner_name || '',
+      blocked_by: (rollupByProject.get(p.id)?.blockers ?? []).join(', '),
       start_date: p.start_date, estimated_end_date: p.estimated_end_date ?? '',
       completion_rate: p.completion_rate,
     })), 'projects');
@@ -133,12 +168,18 @@ export default function ProjectsPage() {
   const doExportPdf = async () => {
     const { exportPdf } = await import('@/lib/export');
     exportPdf(
-      filtered.map(p => ({ ...p, start_date: formatDate(p.start_date), estimated_end_date: formatDate(p.estimated_end_date) })),
+      filtered.map(p => ({
+        ...p,
+        owner: (rollupByProject.get(p.id)?.owners ?? []).join(', ') || p.owner_name || '',
+        blocked_by: (rollupByProject.get(p.id)?.blockers ?? []).join(', '),
+        start_date: formatDate(p.start_date),
+        estimated_end_date: formatDate(p.estimated_end_date),
+      })),
       [
         { header: 'Name', key: 'name' },
         { header: 'Status', key: 'status' },
-        { header: 'Sector', key: 'sector' },
-        { header: 'Owner', key: 'owner_name' },
+        { header: 'Owner', key: 'owner' },
+        { header: 'Blocked by', key: 'blocked_by' },
         { header: 'Start', key: 'start_date' },
         { header: 'End', key: 'estimated_end_date' },
         { header: '%', key: 'completion_rate' },
@@ -252,31 +293,30 @@ export default function ProjectsPage() {
             <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
               <thead className="bg-slate-50 dark:bg-slate-900/50">
                 <tr className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  <th className="px-3 py-3 w-8"></th>
-                  <th className="px-5 py-3 text-start">{t('project.name')}</th>
-                  <th className="px-5 py-3 text-start">Department</th>
-                  <th className="px-5 py-3 text-start">{t('project.status')}</th>
-                  <th className="px-5 py-3 text-start">{t('project.owner')}</th>
-                  <th className="px-5 py-3 text-start">Manager</th>
-                  <th className="px-5 py-3 text-start">Start</th>
-                  <th className="px-5 py-3 text-start">Estimated</th>
-                  <th className="px-5 py-3 text-start">Actual End</th>
-                  <th className="px-5 py-3 text-start">Overdue</th>
-                  <th className="px-5 py-3 text-start">{t('project.completion_rate')}</th>
+                  <th className="px-2 py-3 w-8"></th>
+                  <th className="px-3 py-3 text-start">{t('project.name')}</th>
+                  <th className="px-3 py-3 text-start">{t('project.status')}</th>
+                  <th className="px-3 py-3 text-start">{t('project.owner')}</th>
+                  <th className="px-3 py-3 text-start">Blocked by</th>
+                  <th className="px-3 py-3 text-start">Timeline</th>
+                  <th className="px-3 py-3 text-start">{t('project.completion_rate')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white dark:divide-slate-800 dark:bg-slate-900">
                 {filtered.map(p => {
-                  const ids = membersByProject.get(p.id) ?? new Set<string>();
-                  const members = users.filter(u => ids.has(u.id));
-                  const extra = Math.max(0, ids.size - members.length);
                   const health = projectHealth(p);
                   const isOpen = expanded.has(p.id);
                   const projTasks = tasksByProject.get(p.id) ?? [];
+                  const rollup = rollupByProject.get(p.id);
+                  // Owner = the people its tasks are assigned to; fall back to
+                  // the stored owner_name for projects that have no tasks yet.
+                  const owners = rollup?.owners.length ? rollup.owners : uniquePeople([p.owner_name]);
+                  const blockers = rollup?.blockers ?? [];
+                  const department_ = (p.departments ?? [])[0] ?? p.sector ?? null;
                   return (
                     <React.Fragment key={p.id}>
                       <tr className={cn('text-sm hover:bg-slate-50 dark:hover:bg-slate-800/60', isOpen && 'bg-slate-50 dark:bg-slate-800/40')}>
-                        <td className="px-3 py-3">
+                        <td className="px-2 py-3">
                           <button
                             onClick={() => toggleExpand(p.id)}
                             aria-label={isOpen ? 'Collapse' : 'Expand'}
@@ -285,57 +325,48 @@ export default function ProjectsPage() {
                             <ChevronRight className={cn('h-4 w-4 transition-transform rtl-flip', isOpen && 'rotate-90')} />
                           </button>
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-3 py-3">
                           <Link href={`/projects/${p.id}`} className="flex items-center gap-2">
                             <span className={cn('h-2 w-2 shrink-0 rounded-full', healthClasses[health])} />
                             <div className="min-w-0">
                               <div className="truncate font-medium text-slate-900 dark:text-slate-100">{p.name}</div>
-                              {p.description && (
-                                <div className="mt-0.5 line-clamp-1 text-xs text-slate-500">{p.description}</div>
-                              )}
+                              <div className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+                                {[department_, p.project_manager, p.description].filter(Boolean).join(' · ') || `${projTasks.length} tasks`}
+                              </div>
                             </div>
                           </Link>
                         </td>
-                        <td className="px-5 py-3 text-slate-700 dark:text-slate-200 whitespace-nowrap">{p.sector ?? '—'}</td>
-                        <td className="px-5 py-3"><ProjectStatusBadge status={p.status} /></td>
-                        <td className="px-5 py-3">
-                          {p.owner_name ? (
-                            <div className="flex items-center gap-2">
-                              <Avatar size={24} name={p.owner_name} email={p.owner_email} />
-                              <span className="truncate text-slate-700 dark:text-slate-200">{p.owner_name}</span>
-                            </div>
-                          ) : <span className="text-slate-400">—</span>}
+                        <td className="px-3 py-3"><ProjectStatusBadge status={p.status} /></td>
+                        <td className="px-3 py-3"><PeopleCell people={owners} /></td>
+                        <td className="px-3 py-3">
+                          {blockers.length === 0
+                            ? <span className="text-slate-400">—</span>
+                            : <span className="text-xs font-medium text-amber-600 dark:text-amber-400">{blockers.join(', ')}</span>}
                         </td>
-                        <td className="px-5 py-3 text-slate-700 dark:text-slate-200 whitespace-nowrap">
-                          {p.project_manager ?? <span className="text-slate-400">—</span>}
-                        </td>
-                        <td className="px-5 py-3 text-slate-700 dark:text-slate-200 whitespace-nowrap">{formatDate(p.start_date)}</td>
-                        <td className="px-5 py-3 text-slate-700 dark:text-slate-200 whitespace-nowrap">{formatDate(p.estimated_end_date)}</td>
-                        <td className="px-5 py-3 whitespace-nowrap">
-                          {p.actual_end_date
-                            ? <span className="font-medium text-emerald-600 dark:text-emerald-400">{formatDate(p.actual_end_date)}</span>
-                            : <span className="text-slate-400">—</span>}
-                        </td>
-                        <td className="px-5 py-3 whitespace-nowrap">
+                        <td className="px-3 py-3 whitespace-nowrap text-xs text-slate-600 dark:text-slate-300">
+                          <div>{formatDate(p.start_date, 'MMM d')} → {p.actual_end_date
+                            ? <span className="font-medium text-emerald-600 dark:text-emerald-400">{formatDate(p.actual_end_date, 'MMM d')}</span>
+                            : formatDate(p.estimated_end_date, 'MMM d') || '—'}</div>
                           {(() => {
-                            if (p.status === 'completed' || !p.estimated_end_date) return <span className="text-slate-400">—</span>;
+                            if (p.status === 'completed' || !p.estimated_end_date) return null;
                             const diff = daysBetween(new Date().toISOString().slice(0, 10), p.estimated_end_date);
-                            if (diff === null) return <span className="text-slate-400">—</span>;
-                            if (diff >= 0) return <span className="text-xs text-slate-500">in {diff}d</span>;
-                            return <span className="text-xs font-semibold text-rose-600">{Math.abs(diff)}d overdue</span>;
+                            if (diff === null) return null;
+                            return diff >= 0
+                              ? <div className="text-[11px] text-slate-400">in {diff}d</div>
+                              : <div className="text-[11px] font-semibold text-rose-600">{Math.abs(diff)}d overdue</div>;
                           })()}
                         </td>
-                        <td className="px-5 py-3 min-w-[180px]">
+                        <td className="px-3 py-3">
                           <div className="flex items-center gap-2">
-                            <Progress value={Number(p.completion_rate)} className="w-28" />
-                            <span className="text-xs font-semibold w-10 text-end">{Math.round(Number(p.completion_rate))}%</span>
+                            <Progress value={Number(p.completion_rate)} className="w-16" />
+                            <span className="text-xs font-semibold">{Math.round(Number(p.completion_rate))}%</span>
                           </div>
                         </td>
                       </tr>
                       {isOpen && (
                         <tr className="bg-slate-50/70 dark:bg-slate-900/50">
                           <td></td>
-                          <td colSpan={10} className="px-5 pb-4 pt-0">
+                          <td colSpan={6} className="px-3 pb-4 pt-0">
                             {projTasks.length === 0 ? (
                               <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-500 dark:border-slate-700">
                                 {t('task.none')}
@@ -348,6 +379,7 @@ export default function ProjectsPage() {
                                       <th className="px-4 py-2 text-start">{t('task.title')}</th>
                                       <th className="px-4 py-2 text-start">{t('task.status')}</th>
                                       <th className="px-4 py-2 text-start">{t('task.assignee')}</th>
+                                      <th className="px-4 py-2 text-start">Blocked by</th>
                                       <th className="px-4 py-2 text-start">{t('task.completion')}</th>
                                       <th className="px-4 py-2 text-start">{t('task.due_date')}</th>
                                     </tr>
@@ -369,6 +401,11 @@ export default function ProjectsPage() {
                                                 <span className="text-slate-700 dark:text-slate-200">{task.assignee_name}</span>
                                               </div>
                                             ) : <span className="text-slate-400">—</span>}
+                                          </td>
+                                          <td className="px-4 py-2">
+                                            {task.blocked_by
+                                              ? <span className="font-medium text-amber-600 dark:text-amber-400">{task.blocked_by}</span>
+                                              : <span className="text-slate-400">—</span>}
                                           </td>
                                           <td className="px-4 py-2">
                                             <div className="flex items-center gap-2">

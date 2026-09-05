@@ -4,7 +4,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useData } from '@/lib/store/data';
 import type { UserProfile } from '@/lib/types';
-import { PROJECT_OWNERS } from '@/lib/constants';
 
 type Ctx = {
   user: { id: string; email?: string } | null;
@@ -92,22 +91,13 @@ export function useAuth() {
   return ctx;
 }
 
-export function canManageProjects(role?: UserProfile['role'] | null) {
-  return role === 'admin' || role === 'project_manager';
+// Every signed-in user can create, edit and delete any project or task.
+// Role-based gating is intentionally disabled — see supabase/allow-all-edit.sql
+// for the matching database policies.
+export function canManageProjects(_role?: UserProfile['role'] | null) {
+  return true;
 }
 
-const ALLOWED_EDIT_DELETE_NAMES = new Set<string>(
-  PROJECT_OWNERS.map(n => n.toLowerCase())
-);
-const ALLOWED_EDIT_DELETE_FIRST_NAMES = new Set<string>([
-  'karim', 'farah', 'anjie', 'angie', 'rehab',
-]);
-
-export function canEditDelete(profile?: UserProfile | null) {
-  if (!profile) return false;
-  const name = (profile.full_name ?? '').trim().toLowerCase();
-  if (!name) return false;
-  if (ALLOWED_EDIT_DELETE_NAMES.has(name)) return true;
-  const first = name.split(/\s+/)[0];
-  return ALLOWED_EDIT_DELETE_FIRST_NAMES.has(first);
+export function canEditDelete(_profile?: UserProfile | null) {
+  return true;
 }

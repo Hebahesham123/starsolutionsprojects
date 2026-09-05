@@ -1,6 +1,7 @@
 export type UserRole = 'admin' | 'project_manager' | 'team_member';
 export type ProjectStatus = 'not_started' | 'in_progress' | 'on_going' | 'completed' | 'delayed';
 export type TaskStatus = 'todo' | 'in_progress' | 'on_going' | 'done' | 'blocked';
+export type TaskType = 'DEP' | 'IND';
 
 export interface UserProfile {
   id: string;
@@ -47,6 +48,12 @@ export interface Task {
   completion_percentage: number;
   start_date: string | null;
   due_date: string | null;
+  /** Reference number from the plan, e.g. "1.5". */
+  task_code: string | null;
+  /** DEP = waiting on someone, IND = can be done independently. */
+  task_type: TaskType | null;
+  /** Who this task is blocked by, free text (can name several people). */
+  blocked_by: string | null;
   order_index: number;
   created_by: string | null;
   created_at: string;

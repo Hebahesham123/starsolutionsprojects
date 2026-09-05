@@ -145,6 +145,9 @@ create table if not exists public.tasks (
   completion_percentage integer not null default 0 check (completion_percentage between 0 and 100),
   start_date date,
   due_date date,
+  task_code text,
+  task_type text check (task_type is null or task_type in ('DEP', 'IND')),
+  blocked_by text,
   order_index integer not null default 0,
   created_by uuid references public.users(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -392,24 +395,24 @@ create policy "users_admin_delete" on public.users for delete
 drop policy if exists "projects_read" on public.projects;
 create policy "projects_read" on public.projects for select using (auth.uid() is not null);
 
-drop policy if exists "projects_write" on public.projects;
-create policy "projects_write" on public.projects for all
-  using (public.current_user_role() in ('admin','project_manager'))
-  with check (public.current_user_role() in ('admin','project_manager'));
+-- Any signed-in user can create/edit/delete any project.
+drop policy if exists "projects_write"     on public.projects;
+drop policy if exists "projects_write_all" on public.projects;
+create policy "projects_write_all" on public.projects for all
+  using (auth.uid() is not null)
+  with check (auth.uid() is not null);
 
 -- TASKS
 drop policy if exists "tasks_read" on public.tasks;
 create policy "tasks_read" on public.tasks for select using (auth.uid() is not null);
 
-drop policy if exists "tasks_write_managers" on public.tasks;
-create policy "tasks_write_managers" on public.tasks for all
-  using (public.current_user_role() in ('admin','project_manager'))
-  with check (public.current_user_role() in ('admin','project_manager'));
-
+-- Any signed-in user can create/edit/delete any task.
+drop policy if exists "tasks_write_managers"  on public.tasks;
 drop policy if exists "tasks_update_assignee" on public.tasks;
-create policy "tasks_update_assignee" on public.tasks for update
-  using (assignee_id = auth.uid())
-  with check (assignee_id = auth.uid());
+drop policy if exists "tasks_write_all"       on public.tasks;
+create policy "tasks_write_all" on public.tasks for all
+  using (auth.uid() is not null)
+  with check (auth.uid() is not null);
 
 -- COMMENTS
 drop policy if exists "comments_read" on public.comments;
@@ -418,9 +421,16 @@ create policy "comments_read" on public.comments for select using (auth.uid() is
 drop policy if exists "comments_insert" on public.comments;
 create policy "comments_insert" on public.comments for insert with check (author_id = auth.uid());
 
+-- Any signed-in user can edit or delete any comment.
 drop policy if exists "comments_delete_own" on public.comments;
-create policy "comments_delete_own" on public.comments for delete
-  using (author_id = auth.uid() or public.current_user_role() = 'admin');
+drop policy if exists "comments_delete_all" on public.comments;
+create policy "comments_delete_all" on public.comments for delete
+  using (auth.uid() is not null);
+
+drop policy if exists "comments_update_all" on public.comments;
+create policy "comments_update_all" on public.comments for update
+  using (auth.uid() is not null)
+  with check (auth.uid() is not null);
 
 -- NOTIFICATIONS
 drop policy if exists "notif_read_own" on public.notifications;
@@ -669,11 +679,11 @@ drop policy if exists "attachments_insert" on public.attachments;
 create policy "attachments_insert" on public.attachments for insert
   with check (uploaded_by = auth.uid());
 
--- Delete: uploader or admin.
-drop policy if exists "attachments_delete" on public.attachments;
-create policy "attachments_delete" on public.attachments for delete using (
-  uploaded_by = auth.uid() or public.current_user_role() = 'admin'
-);
+-- Delete: any signed-in user can delete any attachment.
+drop policy if exists "attachments_delete"     on public.attachments;
+drop policy if exists "attachments_delete_all" on public.attachments;
+create policy "attachments_delete_all" on public.attachments for delete
+  using (auth.uid() is not null);
 
 -- 3) Storage bucket + policies.
 insert into storage.buckets (id, name, public)
@@ -691,10 +701,7 @@ create policy "attachments_storage_insert" on storage.objects for insert
 
 drop policy if exists "attachments_storage_delete" on storage.objects;
 create policy "attachments_storage_delete" on storage.objects for delete
-  using (
-    bucket_id = 'attachments'
-    and (owner = auth.uid() or public.current_user_role() = 'admin')
-  );
+  using (bucket_id = 'attachments' and auth.uid() is not null);
 
 
 -- ===========================================================================

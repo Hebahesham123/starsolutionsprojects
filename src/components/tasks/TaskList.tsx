@@ -1,11 +1,27 @@
 'use client';
 
-import type { Task } from '@/lib/types';
+import type { Task, TaskType } from '@/lib/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { TaskStatusBadge } from '@/components/projects/StatusBadge';
 import { formatDate, cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/Progress';
 import { useI18n } from '@/lib/i18n/LanguageProvider';
+
+function TaskTypeBadge({ type }: { type: TaskType }) {
+  return (
+    <span
+      title={type === 'DEP' ? 'Depends on someone else' : 'Independent — can start any time'}
+      className={cn(
+        'shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tracking-wide',
+        type === 'DEP'
+          ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
+          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
+      )}
+    >
+      {type}
+    </span>
+  );
+}
 
 export function TaskList({ tasks, onRowClick }: { tasks: Task[]; onRowClick: (t: Task) => void }) {
   const { t } = useI18n();
@@ -20,6 +36,7 @@ export function TaskList({ tasks, onRowClick }: { tasks: Task[]; onRowClick: (t:
           <tr className="text-start text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             <th className="px-4 py-3 text-start">{t('task.title')}</th>
             <th className="px-4 py-3 text-start">{t('task.assignee')}</th>
+            <th className="px-4 py-3 text-start">Blocked by</th>
             <th className="px-4 py-3 text-start">{t('task.status')}</th>
             <th className="px-4 py-3 text-start">{t('task.completion')}</th>
             <th className="px-4 py-3 text-start">{t('task.due_date')}</th>
@@ -31,7 +48,13 @@ export function TaskList({ tasks, onRowClick }: { tasks: Task[]; onRowClick: (t:
             return (
               <tr key={task.id} onClick={() => onRowClick(task)} className="cursor-pointer text-sm hover:bg-slate-50 dark:hover:bg-slate-800/60">
                 <td className="px-4 py-3">
-                  <div className="font-medium text-slate-900 dark:text-slate-100">{task.title}</div>
+                  <div className="flex items-center gap-2">
+                    {task.task_code && (
+                      <span className="shrink-0 font-mono text-xs text-slate-400">{task.task_code}</span>
+                    )}
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{task.title}</span>
+                    {task.task_type && <TaskTypeBadge type={task.task_type} />}
+                  </div>
                   {task.description && <div className="mt-0.5 line-clamp-1 text-xs text-slate-500">{task.description}</div>}
                 </td>
                 <td className="px-4 py-3">
@@ -41,6 +64,11 @@ export function TaskList({ tasks, onRowClick }: { tasks: Task[]; onRowClick: (t:
                       <span className="truncate text-slate-700 dark:text-slate-200">{task.assignee_name ?? task.assignee_email}</span>
                     </div>
                   ) : <span className="text-slate-400">—</span>}
+                </td>
+                <td className="px-4 py-3">
+                  {task.blocked_by
+                    ? <span className="text-slate-700 dark:text-slate-200">{task.blocked_by}</span>
+                    : <span className="text-slate-400">—</span>}
                 </td>
                 <td className="px-4 py-3"><TaskStatusBadge status={task.status} /></td>
                 <td className="px-4 py-3">

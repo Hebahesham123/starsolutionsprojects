@@ -37,16 +37,9 @@ export const PROJECT_OWNERS = [
   'Anjie Magdy',
 ] as const;
 
-// Users restricted to seeing only their own projects/tasks.
-// Match by email (case-insensitive).
-export const RESTRICTED_USER_EMAILS = [
-  'osama.erian@nstextile-eg.com',
-  'khaled.alnemr@nstextile-eg.com',
-  'mohamed.hussein@nstextile-eg.com',
-] as const;
+// No user is restricted any more — everyone sees and edits every project/task.
+export const RESTRICTED_USER_EMAILS = [] as const;
 
-export function isRestrictedEmail(email?: string | null) {
-  if (!email) return false;
-  const e = email.trim().toLowerCase();
-  return (RESTRICTED_USER_EMAILS as readonly string[]).includes(e);
+export function isRestrictedEmail(_email?: string | null) {
+  return false;
 }

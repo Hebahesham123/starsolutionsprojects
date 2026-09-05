@@ -48,7 +48,9 @@ export default function TasksPage() {
       list = list.filter(
         x => x.title.toLowerCase().includes(needle) ||
              x.description?.toLowerCase().includes(needle) ||
-             x.assignee_name?.toLowerCase().includes(needle)
+             x.assignee_name?.toLowerCase().includes(needle) ||
+             x.blocked_by?.toLowerCase().includes(needle) ||
+             x.task_code?.toLowerCase().includes(needle)
       );
     }
     return list;
@@ -68,7 +70,9 @@ export default function TasksPage() {
     const { exportCsv } = await import('@/lib/export');
     exportCsv(filtered.map(t => ({
       project: projectMap.get(t.project_id)?.name ?? '',
+      code: t.task_code ?? '',
       title: t.title, assignee: t.assignee_name ?? '',
+      type: t.task_type ?? '', blocked_by: t.blocked_by ?? '',
       status: t.status, completion: t.completion_percentage, due: t.due_date ?? '',
     })), 'tasks');
   };
@@ -77,13 +81,18 @@ export default function TasksPage() {
     exportPdf(
       filtered.map(t => ({
         project: projectMap.get(t.project_id)?.name ?? '',
+        code: t.task_code ?? '',
         title: t.title, assignee: t.assignee_name ?? '',
+        type: t.task_type ?? '', blocked_by: t.blocked_by ?? '',
         status: t.status, completion: t.completion_percentage, due: formatDate(t.due_date),
       })),
       [
         { header: 'Project', key: 'project' },
+        { header: '#', key: 'code' },
         { header: 'Title', key: 'title' },
         { header: 'Assignee', key: 'assignee' },
+        { header: 'Type', key: 'type' },
+        { header: 'Blocked by', key: 'blocked_by' },
         { header: 'Status', key: 'status' },
         { header: '%', key: 'completion' },
         { header: 'Due', key: 'due' },
@@ -160,6 +169,7 @@ export default function TasksPage() {
                     <th className="px-4 py-3 text-start">Project</th>
                     <th className="px-4 py-3 text-start">{t('task.title')}</th>
                     <th className="px-4 py-3 text-start">{t('task.assignee')}</th>
+                    <th className="px-4 py-3 text-start">Blocked by</th>
                     <th className="px-4 py-3 text-start">{t('task.status')}</th>
                     <th className="px-4 py-3 text-start">{t('task.completion')}</th>
                     <th className="px-4 py-3 text-start">{t('task.due_date')}</th>
@@ -176,7 +186,10 @@ export default function TasksPage() {
                             {proj?.name ?? '—'}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{task.title}</td>
+                        <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
+                          {task.task_code && <span className="me-1.5 font-mono text-xs font-normal text-slate-400">{task.task_code}</span>}
+                          {task.title}
+                        </td>
                         <td className="px-4 py-3">
                           {task.assignee_name ? (
                             <div className="flex items-center gap-2">
@@ -184,6 +197,11 @@ export default function TasksPage() {
                               <span className="text-slate-700 dark:text-slate-200">{task.assignee_name}</span>
                             </div>
                           ) : <span className="text-slate-400">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {task.blocked_by
+                            ? <span className="text-slate-700 dark:text-slate-200">{task.blocked_by}</span>
+                            : <span className="text-slate-400">—</span>}
                         </td>
                         <td className="px-4 py-3"><TaskStatusBadge status={task.status} /></td>
                         <td className="px-4 py-3">

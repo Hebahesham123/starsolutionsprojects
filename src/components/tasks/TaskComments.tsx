@@ -17,7 +17,7 @@ import { DictateButton } from '@/components/ui/DictateButton';
 import { logActivity } from '@/lib/activity/log';
 
 export function TaskComments({ taskId }: { taskId: string }) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { t } = useI18n();
   const supabase = createClient();
   const { comments: allComments, users, tasks } = useData();
@@ -108,10 +108,10 @@ export function TaskComments({ taskId }: { taskId: string }) {
         {roots.length === 0 && <div className="text-sm text-slate-500">No comments yet.</div>}
         {roots.map(c => (
           <div key={c.id}>
-            <CommentRow c={c} currentUserId={user?.id} onReply={() => setReplyTo(c.id)} onDelete={() => del(c.id)} onEdit={(b) => edit(c.id, b)} isAdmin={profile?.role === 'admin'} />
+            <CommentRow c={c} onReply={() => setReplyTo(c.id)} onDelete={() => del(c.id)} onEdit={(b) => edit(c.id, b)} />
             <div className="ms-10 mt-3 space-y-3">
               {repliesOf(c.id).map(r => (
-                <CommentRow key={r.id} c={r} currentUserId={user?.id} onDelete={() => del(r.id)} onEdit={(b) => edit(r.id, b)} isAdmin={profile?.role === 'admin'} />
+                <CommentRow key={r.id} c={r} onDelete={() => del(r.id)} onEdit={(b) => edit(r.id, b)} />
               ))}
             </div>
           </div>
@@ -145,17 +145,16 @@ export function TaskComments({ taskId }: { taskId: string }) {
 }
 
 function CommentRow({
-  c, currentUserId, onReply, onDelete, onEdit, isAdmin,
+  c, onReply, onDelete, onEdit,
 }: {
   c: Comment & { author?: UserProfile | undefined };
-  currentUserId?: string;
   onReply?: () => void;
   onDelete: () => void;
   onEdit: (body: string) => Promise<boolean>;
-  isAdmin?: boolean;
 }) {
   const { t } = useI18n();
-  const canModify = c.author_id === currentUserId || isAdmin;
+  // Any signed-in user can edit or delete any comment.
+  const canModify = true;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(c.body);
   const [saving, setSaving] = useState(false);
