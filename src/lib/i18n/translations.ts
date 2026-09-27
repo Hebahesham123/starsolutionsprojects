@@ -10,6 +10,7 @@ export const translations = {
     'nav.calendar': 'Calendar',
     'nav.notifications': 'Notifications',
     'nav.team': 'Team',
+    'nav.summary': 'Summary',
     'nav.settings': 'Settings',
     'nav.signout': 'Sign out',
 
@@ -157,6 +158,7 @@ export const translations = {
     'nav.calendar': 'التقويم',
     'nav.notifications': 'الإشعارات',
     'nav.team': 'الفريق',
+    'nav.summary': 'الملخص',
     'nav.settings': 'الإعدادات',
     'nav.signout': 'تسجيل الخروج',
 
